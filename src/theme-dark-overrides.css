@@ -1,0 +1,13 @@
+/* Hand-tuned dark theme styles that the generated theme-dark.css cannot infer. */
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  background: #15171c;
+}
+:root[data-theme='dark'] body {
+  background: #15171c;
+}
+/* Inputs without a light-theme background would otherwise get the browser's
+   dark-scheme grey and look disabled. */
+:root[data-theme='dark'] .duration-field input {
+  background: transparent;
+}

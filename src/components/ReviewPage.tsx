@@ -20,13 +20,17 @@ import {
   totals,
   weekStart,
 } from '../model';
-import {
-  selectReview,
-  selectWeek,
-  undoEntries,
-  updateEntries,
-} from '../review';
-import type { EntryPatch, UndoRecord } from '../review';
+import { selectReview, undoEntries, updateEntries } from '../review';
+import type { EntryPatch, ReviewFilters, UndoRecord } from '../review';
+
+const ACTIONS: Record<string, string> = {
+  review: 'Mark reviewed',
+  reopen: 'Return to review',
+  billable: 'Mark billable',
+  nonbillable: 'Mark non-billable',
+  client: 'Move to client',
+};
+const plural = (n: number) => `${n} ${n === 1 ? 'entry' : 'entries'}`;
 
 export function ReviewPage({
   data,
@@ -51,44 +55,85 @@ export function ReviewPage({
   const [employee, setEmployee] = useState('all');
   const [status, setStatus] = useState('all');
   const [search, setSearch] = useState('');
+  const filters: ReviewFilters = { week, clientId, employee, status, search };
   const [selected, setSelected] = useState<string[]>([]);
   const [action, setAction] = useState('review');
   const [targetClient, setTargetClient] = useState(data.clients[0]?.id ?? '');
   const [operation, setOperation] = useState<UndoRecord | null>(null);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
-  const weekEntries = selectWeek(data.entries, week);
-  const visible = selectReview(data.entries, data.clients, {
-    week,
-    clientId,
-    employee,
-    status,
-    search,
-  });
-  const summaryEntries = weekEntries;
-  const exportEntries = weekEntries;
-  const summary = totals(summaryEntries);
-  const selectedIds = selected.filter((id) =>
-    data.entries.some((e) => e.id === id),
-  );
+  const visible = selectReview(data.entries, data.clients, filters);
+  // Totals and export follow the active week and filters, never the selection.
+  const summary = totals(visible);
+  const exportEntries = visible;
+  // Actions only ever touch selected rows that are currently visible.
+  const selectedEntries = visible.filter((e) => selected.includes(e.id));
+  const selectedIds = selectedEntries.map((e) => e.id);
+  // What the "needs review" shortcut will show: current filters, pending only.
+  const pendingInView = selectReview(data.entries, data.clients, {
+    ...filters,
+    status: 'pending',
+  }).length;
   const employees = [...new Set(data.entries.map((e) => e.employee))].sort();
-  function changeView(update: () => void) {
-    update();
+  function changeView(patch: Partial<ReviewFilters>) {
+    if (patch.week !== undefined) setWeek(patch.week);
+    if (patch.clientId !== undefined) setClientId(patch.clientId);
+    if (patch.employee !== undefined) setEmployee(patch.employee);
+    if (patch.status !== undefined) setStatus(patch.status);
+    if (patch.search !== undefined) setSearch(patch.search);
+    if (!selectedIds.length) return;
+    const nextVisible = new Set(
+      selectReview(data.entries, data.clients, { ...filters, ...patch }).map(
+        (e) => e.id,
+      ),
+    );
+    const kept = selectedIds.filter((id) => nextVisible.has(id));
+    const dropped = selectedIds.length - kept.length;
+    if (!dropped) return;
+    setSelected(kept);
+    setMessage(
+      `${plural(dropped)} left the view and ${dropped === 1 ? 'was' : 'were'} deselected. ${kept.length} still selected.`,
+    );
   }
-  function apply(ids: string[], patch: EntryPatch) {
+  function apply(ids: string[], patch: EntryPatch, bulk: boolean) {
     setError('');
     try {
-      const next = updateEntries(data, ids, patch);
-      save(next);
-      setOperation({ before: data, ids });
-      setSelected([]);
+      const result = updateEntries(data, ids, patch);
+      const changed = result.undo.changes.length;
+      if (changed) {
+        save(result.data);
+        setOperation(result.undo);
+      }
+      if (bulk) setSelected([]);
+      const returned =
+        patch.reviewed === undefined
+          ? result.undo.changes.filter((c) => c.before.reviewed).length
+          : 0;
+      const skipped = ids.length - changed;
       setMessage(
-        `Updated ${ids.length} ${ids.length === 1 ? 'entry' : 'entries'}.`,
+        changed
+          ? `Updated ${plural(changed)}.` +
+              (skipped ? ` ${skipped} already matched.` : '') +
+              (returned
+                ? ` ${plural(returned)} returned to Needs review after the correction.`
+                : '')
+          : 'No changes: the selection already matches.',
       );
     } catch (e) {
       setError((e as Error).message);
     }
   }
+  const actionPatch = (): EntryPatch =>
+    action === 'client'
+      ? { clientId: targetClient }
+      : action === 'review' || action === 'reopen'
+        ? { reviewed: action === 'review' }
+        : { billable: action === 'billable' };
+  const actionLabel =
+    action === 'client'
+      ? `Move to ${data.clients.find((c) => c.id === targetClient)?.name ?? 'client'}`
+      : ACTIONS[action];
+  const isCorrection = !['review', 'reopen'].includes(action);
   return (
     <section className="review-page" aria-label="Weekly review">
       <div className="period-toolbar">
@@ -96,7 +141,7 @@ export function ReviewPage({
           <button
             className="icon-button"
             aria-label="Previous review week"
-            onClick={() => changeView(() => setWeek(addDays(week, -7)))}
+            onClick={() => changeView({ week: addDays(week, -7) })}
           >
             <ChevronLeft size={18} />
           </button>
@@ -108,14 +153,14 @@ export function ReviewPage({
               value={week}
               onChange={(e) =>
                 e.target.value &&
-                changeView(() => setWeek(weekStart(e.target.value)))
+                changeView({ week: weekStart(e.target.value) })
               }
             />
           </label>
           <button
             className="icon-button"
             aria-label="Next review week"
-            onClick={() => changeView(() => setWeek(addDays(week, 7)))}
+            onClick={() => changeView({ week: addDays(week, 7) })}
           >
             <ChevronRight size={18} />
           </button>
@@ -129,7 +174,9 @@ export function ReviewPage({
               `counsel-review-${week}.csv`,
               'text/csv;charset=utf-8',
             );
-            setMessage(`Exported ${exportEntries.length} entries.`);
+            setMessage(
+              `Exported ${plural(exportEntries.length)} in the current view.`,
+            );
           }}
         >
           <ArrowDownToLine size={16} />
@@ -163,6 +210,14 @@ export function ReviewPage({
           <strong>
             {visible.filter((e) => e.reviewed).length} / {visible.length}
           </strong>
+          {status !== 'pending' && pendingInView > 0 && (
+            <button
+              className="text-button"
+              onClick={() => changeView({ status: 'pending' })}
+            >
+              Show {pendingInView} needing review
+            </button>
+          )}
         </div>
       </div>
       <div className="entries-panel">
@@ -179,13 +234,13 @@ export function ReviewPage({
               aria-label="Search review"
               placeholder="Find an entry…"
               value={search}
-              onChange={(e) => changeView(() => setSearch(e.target.value))}
+              onChange={(e) => changeView({ search: e.target.value })}
             />
           </label>
           <select
             aria-label="Review client"
             value={clientId}
-            onChange={(e) => changeView(() => setClientId(e.target.value))}
+            onChange={(e) => changeView({ clientId: e.target.value })}
           >
             <option value="all">All clients</option>
             {data.clients.map((c) => (
@@ -197,7 +252,7 @@ export function ReviewPage({
           <select
             aria-label="Review employee"
             value={employee}
-            onChange={(e) => changeView(() => setEmployee(e.target.value))}
+            onChange={(e) => changeView({ employee: e.target.value })}
           >
             <option value="all">All team members</option>
             {employees.map((name) => (
@@ -207,7 +262,7 @@ export function ReviewPage({
           <select
             aria-label="Review status"
             value={status}
-            onChange={(e) => changeView(() => setStatus(e.target.value))}
+            onChange={(e) => changeView({ status: e.target.value })}
           >
             <option value="all">All review states</option>
             <option value="pending">Needs review</option>
@@ -222,6 +277,12 @@ export function ReviewPage({
               checked={
                 visible.length > 0 && selectedIds.length === visible.length
               }
+              ref={(el) => {
+                if (el)
+                  el.indeterminate =
+                    selectedIds.length > 0 &&
+                    selectedIds.length < visible.length;
+              }}
               disabled={!visible.length || readOnly}
               onChange={(e) =>
                 setSelected(e.target.checked ? visible.map((e) => e.id) : [])
@@ -229,7 +290,9 @@ export function ReviewPage({
             />
             Select visible
           </label>
-          <span className="selection-count">{selectedIds.length} selected</span>
+          <span className="selection-count">
+            {selectedIds.length} of {visible.length} selected
+          </span>
           <select
             aria-label="Bulk action"
             value={action}
@@ -257,20 +320,19 @@ export function ReviewPage({
           <button
             className="button primary small"
             disabled={!selectedIds.length || readOnly}
-            onClick={() =>
-              apply(
-                selectedIds,
-                action === 'client'
-                  ? { clientId: targetClient }
-                  : action === 'review' || action === 'reopen'
-                    ? { reviewed: action === 'review' }
-                    : { billable: action === 'billable' },
-              )
-            }
+            onClick={() => apply(selectedIds, actionPatch(), true)}
           >
             Apply to {selectedIds.length} selected
           </button>
         </div>
+        <p className="action-scope" data-testid="action-scope">
+          {selectedIds.length
+            ? `${actionLabel} will apply to ${plural(selectedIds.length)} (${duration(
+                totals(selectedEntries).total,
+              )}), all visible below.` +
+              (isCorrection ? ' Changed entries return to Needs review.' : '')
+            : 'Select visible entries to apply an action. Entries that leave the view are deselected.'}
+        </p>
         {error && (
           <p className="form-error review-feedback" role="alert">
             {error}
@@ -284,7 +346,7 @@ export function ReviewPage({
               disabled={readOnly}
               onClick={() => {
                 try {
-                  save(undoEntries(operation));
+                  save(undoEntries(data, operation));
                   setOperation(null);
                   setError('');
                   setMessage('Last review action undone.');
@@ -351,7 +413,7 @@ export function ReviewPage({
                     disabled={readOnly}
                     aria-label={`${entry.reviewed ? 'Reopen' : 'Review'} ${entry.description || client.name}`}
                     onClick={() =>
-                      apply([entry.id], { reviewed: !entry.reviewed })
+                      apply([entry.id], { reviewed: !entry.reviewed }, false)
                     }
                   >
                     {entry.reviewed && <Check size={13} />}{' '}
@@ -375,7 +437,10 @@ export function ReviewPage({
             {visible.length} entries · {shortDate(week)} –{' '}
             {shortDate(addDays(week, 6))}
           </span>
-          <span>Export includes all entries in this view.</span>
+          <span>
+            Totals and export cover the {plural(visible.length)} in this view,
+            not the selection.
+          </span>
         </div>
       </div>
     </section>

@@ -1,16 +1,27 @@
 import { useState } from 'react';
-import { Check, Plus } from 'lucide-react';
-import { COLORS, EMPLOYEE, localDate, validateEntry } from '../model';
+import { Check, Plus, Repeat2 } from 'lucide-react';
+import {
+  COLORS,
+  duration,
+  EMPLOYEE,
+  localDate,
+  shortDate,
+  validateEntry,
+} from '../model';
 import type { Client, Entry } from '../model';
+import { previousDayEntries } from '../review';
 import { Modal } from './Modal';
 export function EntryForm({
   entry,
   clients,
+  entries = [],
   onSave,
   onClose,
 }: {
   entry?: Entry;
   clients: Client[];
+  /** Existing entries, used to offer repeating the previous day's work. */
+  entries?: Entry[];
   onSave: (entry: Entry, client?: Client) => void;
   onClose: () => void;
 }) {
@@ -26,8 +37,25 @@ export function EntryForm({
   );
   const [clientName, setClientName] = useState('');
   const [description, setDescription] = useState(entry?.description ?? '');
-  const [billable, setBillable] = useState(true);
+  const [billable, setBillable] = useState(entry?.billable ?? true);
   const [error, setError] = useState('');
+  const [repeated, setRepeated] = useState('');
+  const previous = entry
+    ? null
+    : previousDayEntries(
+        entries.filter((e) => clients.some((c) => c.id === e.clientId)),
+        date,
+        EMPLOYEE,
+      );
+  function repeat(source: Entry) {
+    setClientId(source.clientId);
+    setHours(String(Math.floor(source.minutes / 60)));
+    setMinutes(String(source.minutes % 60));
+    setDescription(source.description);
+    setBillable(source.billable);
+    setRepeated(source.id);
+    setError('');
+  }
   return (
     <Modal
       title={entry ? 'Edit time entry' : 'Make your time count.'}
@@ -75,6 +103,44 @@ export function EntryForm({
           }
         }}
       >
+        {previous && (
+          <fieldset className="repeat-entries">
+            <legend>
+              <Repeat2 size={14} /> Repeat from{' '}
+              {shortDate(previous.date, {
+                weekday: 'long',
+                day: 'numeric',
+                month: 'short',
+              })}
+            </legend>
+            <div>
+              {previous.entries.map((source) => {
+                const client = clients.find((c) => c.id === source.clientId)!;
+                return (
+                  <button
+                    type="button"
+                    key={source.id}
+                    className={repeated === source.id ? 'selected' : ''}
+                    aria-pressed={repeated === source.id}
+                    aria-label={`Repeat ${client.name}: ${source.description || 'time entry'}, ${duration(source.minutes)}`}
+                    onClick={() => repeat(source)}
+                  >
+                    <strong>{client.name}</strong>
+                    <span>
+                      {duration(source.minutes)} ·{' '}
+                      {source.description || 'No description'}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+            <p aria-live="polite">
+              {repeated
+                ? 'Details copied below for the date you choose. Review them, then save.'
+                : 'Copies client, duration, description and billability. Nothing is saved until you choose Save entry.'}
+            </p>
+          </fieldset>
+        )}
         <label className="field">
           Client
           <select

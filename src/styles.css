@@ -2584,7 +2584,8 @@ tbody tr:hover {
     padding: 14px;
     gap: 10px;
   }
-  .review-notice {
+  .review-notice,
+  .action-scope {
     padding-inline: 14px;
   }
   .review-summary strong {
@@ -2597,4 +2598,75 @@ tbody tr:hover {
     flex-wrap: wrap;
     gap: 7px;
   }
+}
+.review-summary .text-button {
+  margin-top: 8px;
+  padding: 0;
+  font-size: 12px;
+  text-align: left;
+}
+.action-scope {
+  margin: 0;
+  padding: 8px 24px;
+  border-bottom: 1px solid var(--border);
+  background: #f7f8fa;
+  color: #4f5663;
+  font-size: 12px;
+}
+.repeat-entries {
+  margin: 0 0 20px;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}
+.repeat-entries legend {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 8px;
+  padding: 0;
+  font-size: 13px;
+  font-weight: 500;
+}
+.repeat-entries > div {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 150px;
+  overflow-y: auto;
+}
+.repeat-entries button {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  padding: 8px 12px;
+  border: 1px solid #e2e4ea;
+  border-radius: 6px;
+  background: white;
+  color: #4a505d;
+  text-align: left;
+  font-size: 12px;
+}
+.repeat-entries button:hover {
+  background: #f7f6fa;
+}
+.repeat-entries button.selected {
+  border-color: #9b8cc8;
+  background: #f5f3f9;
+}
+.repeat-entries button strong {
+  color: #292d37;
+  font-size: 13px;
+  font-weight: 500;
+}
+.repeat-entries button span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.repeat-entries p {
+  margin: 6px 0 0;
+  color: #62656b;
+  font-size: 12px;
 }

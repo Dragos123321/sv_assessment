@@ -8,6 +8,10 @@ import '@fontsource/manrope/latin-500.css';
 import '@fontsource/manrope/latin-600.css';
 import '@fontsource/manrope/latin-700.css';
 import './styles.css';
+import './theme-dark.css';
+import './theme-dark-overrides.css';
+import { applyTheme, initialTheme } from './theme';
+applyTheme(initialTheme());
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
     <App />

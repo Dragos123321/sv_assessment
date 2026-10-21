@@ -12,7 +12,8 @@
     "test:e2e": "playwright test",
     "check": "npm test && npm run build",
     "format": "prettier --write .",
-    "format:check": "prettier --check ."
+    "format:check": "prettier --check .",
+    "theme:dark": "node scripts/dark-theme.mjs && prettier --write src/theme-dark.css"
   },
   "dependencies": {
     "@fontsource/dm-sans": "^5.3.0",

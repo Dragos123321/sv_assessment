@@ -34,6 +34,7 @@ npm run check            # Unit tests and build
 npx playwright install chromium
 npm run test:e2e          # Desktop and mobile Chromium flows, including axe checks
 npm run preview          # Serve the production build locally
+npm run theme:dark       # Regenerate src/theme-dark.css after changing colours in styles.css
 ```
 
 Browser tests start their own server on port 5177; leave that port free. The mobile project emulates a phone in Chromium; it is not a test of native Safari. CI installs the browser automatically. Existing checks cover established workflows; passing them is not a guarantee that the reported customer issues are resolved.

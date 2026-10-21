@@ -16,6 +16,8 @@ import {
   Plus,
   Search,
   ShieldCheck,
+  Moon,
+  Sun,
   Upload,
   X,
 } from 'lucide-react';
@@ -43,12 +45,15 @@ import { ClientForm } from './components/ClientForm';
 import { Stat } from './components/Stat';
 import { ReviewPage } from './components/ReviewPage';
 import { saveEntry } from './review';
+import { applyTheme, initialTheme } from './theme';
+import type { Theme } from './theme';
 import pilotWorkspace from './fixtures/pilot-workspace.json';
 import { EntryTable } from './components/EntryTable';
 type Toast = { text: string; undo?: () => void };
 export default function App() {
   const { data, save, error: storageError } = useStore();
   const [page, setPage] = useState<Page>('entries');
+  const [theme, setTheme] = useState<Theme>(initialTheme);
   const [week, setWeek] = useState(weekStart(localDate()));
   const [range, setRange] = useState('week');
   const [search, setSearch] = useState('');
@@ -153,6 +158,18 @@ export default function App() {
               }}
             >
               <Database size={16} />
+            </button>
+            <button
+              className="icon-button"
+              aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} theme`}
+              title={`Switch to ${theme === 'dark' ? 'light' : 'dark'} theme`}
+              onClick={() => {
+                const next = theme === 'dark' ? 'light' : 'dark';
+                applyTheme(next, true);
+                setTheme(next);
+              }}
+            >
+              {theme === 'dark' ? <Sun size={16} /> : <Moon size={16} />}
             </button>
             <button
               className="icon-button"
@@ -660,6 +677,7 @@ export default function App() {
         <EntryForm
           entry={entryModal === 'new' ? undefined : entryModal}
           clients={data.clients}
+          entries={data.entries}
           onClose={() => setEntryModal(null)}
           onSave={(entry, client) => {
             save(
